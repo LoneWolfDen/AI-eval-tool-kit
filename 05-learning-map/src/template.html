@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{TITLE}}</title>
+<style>
+{{STYLE}}
+</style>
+</head>
+<body>
+<main class="page">
+  <header>
+    <h1>{{TITLE}}</h1>
+    <p class="subtitle">{{SUBTITLE}}</p>
+    <nav class="strip" id="strip" aria-label="Route overview"></nav>
+    <div class="progress-line">
+      <span id="overall" aria-live="polite"></span>
+      <button class="link-button" id="reset" type="button">Clear progress</button>
+    </div>
+    <div class="filters" id="filters" role="group" aria-label="Filter stops by type"></div>
+  </header>
+
+  <noscript>
+    <p class="subtitle">Tick boxes and filters need JavaScript. The full list is in RESOURCES.md.</p>
+  </noscript>
+
+  <div id="stages"></div>
+
+  <footer class="foot">
+    <p>Tick a stop when you finish it. Progress is saved in this browser only.</p>
+    <p>Links were checked on {{CHECKED}}. Pages move, so edit resources.json and run build.py to refresh.</p>
+  </footer>
+</main>
+
+<script type="application/json" id="map-data">{{DATA_JSON}}</script>
+<script>
+{{SCRIPT}}
+</script>
+</body>
+</html>

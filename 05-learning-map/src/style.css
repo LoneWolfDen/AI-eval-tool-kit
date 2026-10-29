@@ -1,0 +1,139 @@
+/* Design idea: a transit map. Each stage is a coloured line, each resource is a
+   stop you tick, and each stage ends with a square "gate" stop where you build something.
+   Rail geometry: the rail is 6px wide and centred 16px from the left edge of a stage;
+   every dot below is positioned to share that centre line. */
+
+:root {
+  --paper: #f6f7f9;
+  --surface: #ffffff;
+  --ink: #14202b;
+  --muted: #55616d;
+  --rule: #d3d9df;
+  --focus: #0b6bcb;
+  --font-body: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+  --font-sign: "Barlow Condensed", "Roboto Condensed", "Arial Narrow", "Avenir Next Condensed", system-ui, sans-serif;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --paper: #0f1519;
+    --surface: #161e24;
+    --ink: #e7edf2;
+    --muted: #9aa7b3;
+    --rule: #2a353e;
+    --focus: #7db8f5;
+  }
+}
+
+/* Each stage and strip segment carries its own line colour via --c-light / --c-dark. */
+.seg, .stage { --c: var(--c-light); }
+@media (prefers-color-scheme: dark) {
+  .seg, .stage { --c: var(--c-dark); }
+}
+
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font: 16px/1.55 var(--font-body);
+}
+
+.page { max-width: 40rem; margin: 0 auto; padding: 1.75rem 1rem 4rem; }
+
+:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+
+/* ---- header ---- */
+
+h1 { font: 700 2.6rem/1 var(--font-sign); letter-spacing: 0.01em; margin: 0 0 0.6rem; }
+.subtitle { margin: 0; color: var(--muted); max-width: 34rem; }
+
+.strip { display: flex; gap: 4px; margin: 1.5rem 0 0.75rem; }
+.seg { flex: 1; min-width: 0; color: var(--ink); text-decoration: none; }
+.seg-bar { display: block; height: 10px; background: var(--rule); border-radius: 5px; overflow: hidden; }
+.seg-fill { display: block; height: 100%; width: 0; background: var(--c); transition: width 0.4s ease; }
+.seg-name { display: block; margin-top: 0.3rem; font: 600 1rem/1.2 var(--font-sign); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+.progress-line { display: flex; justify-content: space-between; align-items: center; gap: 1rem; color: var(--muted); font-size: 0.95rem; }
+.link-button { font: inherit; color: var(--muted); background: none; border: 0; padding: 0.25rem; text-decoration: underline; cursor: pointer; }
+
+.filters { display: flex; flex-wrap: wrap; gap: 0.4rem; margin: 0.9rem 0 0; }
+.chip {
+  font: inherit; font-size: 0.9rem; padding: 0.3rem 0.8rem;
+  border: 1px solid var(--rule); border-radius: 999px;
+  background: var(--surface); color: var(--ink); cursor: pointer;
+}
+.chip[aria-pressed="true"] { background: var(--ink); color: var(--paper); border-color: var(--ink); }
+
+/* ---- stage: the line ---- */
+
+.stage { position: relative; margin-top: 2.5rem; padding-bottom: 0.5rem; scroll-margin-top: 1rem; }
+.stage::before {
+  content: ""; position: absolute; left: 13px; top: 16px; bottom: 0;
+  width: 6px; border-radius: 3px; background: var(--c);
+}
+
+.stage-head { position: relative; padding-left: 44px; }
+.hub {
+  position: absolute; left: 3px; top: 3px; width: 26px; height: 26px; border-radius: 50%;
+  background: var(--paper); border: 5px solid var(--c);
+  box-shadow: 0 0 0 3px var(--paper), 0 0 0 5px var(--c);
+}
+h2 { font: 700 1.9rem/1.1 var(--font-sign); margin: 0; }
+.goal { margin: 0.3rem 0 0; color: var(--muted); }
+.stage-count { margin: 0.3rem 0 0; font-size: 0.9rem; color: var(--muted); }
+
+/* ---- stops ---- */
+
+.stops { list-style: none; margin: 0.6rem 0 0; padding: 0; }
+.stop { position: relative; padding-left: 44px; }
+.stop-row { display: block; padding: 0.55rem 0; cursor: pointer; }
+
+.stop-box { position: absolute; left: 4px; top: 0.6rem; width: 24px; height: 24px; margin: 0; opacity: 0; cursor: pointer; }
+.dot {
+  position: absolute; left: 4px; top: 0.6rem; width: 24px; height: 24px; border-radius: 50%;
+  background: var(--paper); border: 4px solid var(--c);
+}
+.stop.deeper .dot { left: 7px; top: 0.75rem; width: 18px; height: 18px; border-width: 3px; }
+.stop.gate .dot { border-radius: 6px; }
+
+.stop-box:checked ~ .dot { background: var(--c); }
+.stop-box:checked ~ .dot::after {
+  content: ""; position: absolute; left: 4px; top: -1px; width: 5px; height: 10px;
+  border: solid var(--paper); border-width: 0 2.5px 2.5px 0; transform: rotate(45deg);
+}
+.stop.deeper .stop-box:checked ~ .dot::after { left: 2px; top: -2px; width: 4px; height: 8px; }
+.stop-box:focus-visible ~ .dot { outline: 3px solid var(--focus); outline-offset: 2px; }
+
+.stop-text { display: block; }
+.title { font-weight: 600; }
+.title a { color: var(--ink); text-underline-offset: 3px; text-decoration-thickness: 1px; }
+.title a:hover { text-decoration-thickness: 2px; }
+.stop-box:checked ~ .stop-text .title a { color: var(--muted); }
+.meta { display: block; font-size: 0.85rem; color: var(--muted); }
+.tag { display: inline-block; margin-right: 0.4rem; padding: 0 0.45rem; border: 1px solid var(--rule); border-radius: 3px; color: var(--ink); }
+.note { display: block; margin-top: 0.15rem; font-size: 0.95rem; color: var(--muted); }
+.check-line { display: block; margin-top: 0.35rem; font-size: 0.95rem; }
+
+details.more { margin-top: 0.25rem; }
+details.more > summary { padding: 0.5rem 0 0.5rem 44px; font-weight: 600; color: var(--muted); cursor: pointer; list-style: none; }
+details.more > summary::-webkit-details-marker { display: none; }
+details.more > summary::after { content: " +"; }
+details.more[open] > summary::after { content: " \2212"; }
+details.more > .stops { margin-top: 0; }
+
+/* ---- footer ---- */
+
+.foot { margin-top: 3rem; padding-top: 1rem; border-top: 1px solid var(--rule); color: var(--muted); font-size: 0.9rem; }
+.foot p { margin: 0 0 0.5rem; }
+
+@media (min-width: 48rem) {
+  .page { padding-top: 3rem; }
+  h1 { font-size: 3.4rem; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * { transition: none !important; }
+}

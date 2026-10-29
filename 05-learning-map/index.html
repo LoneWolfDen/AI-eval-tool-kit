@@ -1,0 +1,411 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AI learning route</title>
+<style>
+/* Design idea: a transit map. Each stage is a coloured line, each resource is a
+   stop you tick, and each stage ends with a square "gate" stop where you build something.
+   Rail geometry: the rail is 6px wide and centred 16px from the left edge of a stage;
+   every dot below is positioned to share that centre line. */
+
+:root {
+  --paper: #f6f7f9;
+  --surface: #ffffff;
+  --ink: #14202b;
+  --muted: #55616d;
+  --rule: #d3d9df;
+  --focus: #0b6bcb;
+  --font-body: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+  --font-sign: "Barlow Condensed", "Roboto Condensed", "Arial Narrow", "Avenir Next Condensed", system-ui, sans-serif;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --paper: #0f1519;
+    --surface: #161e24;
+    --ink: #e7edf2;
+    --muted: #9aa7b3;
+    --rule: #2a353e;
+    --focus: #7db8f5;
+  }
+}
+
+/* Each stage and strip segment carries its own line colour via --c-light / --c-dark. */
+.seg, .stage { --c: var(--c-light); }
+@media (prefers-color-scheme: dark) {
+  .seg, .stage { --c: var(--c-dark); }
+}
+
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font: 16px/1.55 var(--font-body);
+}
+
+.page { max-width: 40rem; margin: 0 auto; padding: 1.75rem 1rem 4rem; }
+
+:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+
+/* ---- header ---- */
+
+h1 { font: 700 2.6rem/1 var(--font-sign); letter-spacing: 0.01em; margin: 0 0 0.6rem; }
+.subtitle { margin: 0; color: var(--muted); max-width: 34rem; }
+
+.strip { display: flex; gap: 4px; margin: 1.5rem 0 0.75rem; }
+.seg { flex: 1; min-width: 0; color: var(--ink); text-decoration: none; }
+.seg-bar { display: block; height: 10px; background: var(--rule); border-radius: 5px; overflow: hidden; }
+.seg-fill { display: block; height: 100%; width: 0; background: var(--c); transition: width 0.4s ease; }
+.seg-name { display: block; margin-top: 0.3rem; font: 600 1rem/1.2 var(--font-sign); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+.progress-line { display: flex; justify-content: space-between; align-items: center; gap: 1rem; color: var(--muted); font-size: 0.95rem; }
+.link-button { font: inherit; color: var(--muted); background: none; border: 0; padding: 0.25rem; text-decoration: underline; cursor: pointer; }
+
+.filters { display: flex; flex-wrap: wrap; gap: 0.4rem; margin: 0.9rem 0 0; }
+.chip {
+  font: inherit; font-size: 0.9rem; padding: 0.3rem 0.8rem;
+  border: 1px solid var(--rule); border-radius: 999px;
+  background: var(--surface); color: var(--ink); cursor: pointer;
+}
+.chip[aria-pressed="true"] { background: var(--ink); color: var(--paper); border-color: var(--ink); }
+
+/* ---- stage: the line ---- */
+
+.stage { position: relative; margin-top: 2.5rem; padding-bottom: 0.5rem; scroll-margin-top: 1rem; }
+.stage::before {
+  content: ""; position: absolute; left: 13px; top: 16px; bottom: 0;
+  width: 6px; border-radius: 3px; background: var(--c);
+}
+
+.stage-head { position: relative; padding-left: 44px; }
+.hub {
+  position: absolute; left: 3px; top: 3px; width: 26px; height: 26px; border-radius: 50%;
+  background: var(--paper); border: 5px solid var(--c);
+  box-shadow: 0 0 0 3px var(--paper), 0 0 0 5px var(--c);
+}
+h2 { font: 700 1.9rem/1.1 var(--font-sign); margin: 0; }
+.goal { margin: 0.3rem 0 0; color: var(--muted); }
+.stage-count { margin: 0.3rem 0 0; font-size: 0.9rem; color: var(--muted); }
+
+/* ---- stops ---- */
+
+.stops { list-style: none; margin: 0.6rem 0 0; padding: 0; }
+.stop { position: relative; padding-left: 44px; }
+.stop-row { display: block; padding: 0.55rem 0; cursor: pointer; }
+
+.stop-box { position: absolute; left: 4px; top: 0.6rem; width: 24px; height: 24px; margin: 0; opacity: 0; cursor: pointer; }
+.dot {
+  position: absolute; left: 4px; top: 0.6rem; width: 24px; height: 24px; border-radius: 50%;
+  background: var(--paper); border: 4px solid var(--c);
+}
+.stop.deeper .dot { left: 7px; top: 0.75rem; width: 18px; height: 18px; border-width: 3px; }
+.stop.gate .dot { border-radius: 6px; }
+
+.stop-box:checked ~ .dot { background: var(--c); }
+.stop-box:checked ~ .dot::after {
+  content: ""; position: absolute; left: 4px; top: -1px; width: 5px; height: 10px;
+  border: solid var(--paper); border-width: 0 2.5px 2.5px 0; transform: rotate(45deg);
+}
+.stop.deeper .stop-box:checked ~ .dot::after { left: 2px; top: -2px; width: 4px; height: 8px; }
+.stop-box:focus-visible ~ .dot { outline: 3px solid var(--focus); outline-offset: 2px; }
+
+.stop-text { display: block; }
+.title { font-weight: 600; }
+.title a { color: var(--ink); text-underline-offset: 3px; text-decoration-thickness: 1px; }
+.title a:hover { text-decoration-thickness: 2px; }
+.stop-box:checked ~ .stop-text .title a { color: var(--muted); }
+.meta { display: block; font-size: 0.85rem; color: var(--muted); }
+.tag { display: inline-block; margin-right: 0.4rem; padding: 0 0.45rem; border: 1px solid var(--rule); border-radius: 3px; color: var(--ink); }
+.note { display: block; margin-top: 0.15rem; font-size: 0.95rem; color: var(--muted); }
+.check-line { display: block; margin-top: 0.35rem; font-size: 0.95rem; }
+
+details.more { margin-top: 0.25rem; }
+details.more > summary { padding: 0.5rem 0 0.5rem 44px; font-weight: 600; color: var(--muted); cursor: pointer; list-style: none; }
+details.more > summary::-webkit-details-marker { display: none; }
+details.more > summary::after { content: " +"; }
+details.more[open] > summary::after { content: " \2212"; }
+details.more > .stops { margin-top: 0; }
+
+/* ---- footer ---- */
+
+.foot { margin-top: 3rem; padding-top: 1rem; border-top: 1px solid var(--rule); color: var(--muted); font-size: 0.9rem; }
+.foot p { margin: 0 0 0.5rem; }
+
+@media (min-width: 48rem) {
+  .page { padding-top: 3rem; }
+  h1 { font-size: 3.4rem; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * { transition: none !important; }
+}
+
+</style>
+</head>
+<body>
+<main class="page">
+  <header>
+    <h1>AI learning route</h1>
+    <p class="subtitle">From prompting basics to team guidance: evaluation, agents and privacy, using free resources.</p>
+    <nav class="strip" id="strip" aria-label="Route overview"></nav>
+    <div class="progress-line">
+      <span id="overall" aria-live="polite"></span>
+      <button class="link-button" id="reset" type="button">Clear progress</button>
+    </div>
+    <div class="filters" id="filters" role="group" aria-label="Filter stops by type"></div>
+  </header>
+
+  <noscript>
+    <p class="subtitle">Tick boxes and filters need JavaScript. The full list is in RESOURCES.md.</p>
+  </noscript>
+
+  <div id="stages"></div>
+
+  <footer class="foot">
+    <p>Tick a stop when you finish it. Progress is saved in this browser only.</p>
+    <p>Links were checked on 2026-10-29. Pages move, so edit resources.json and run build.py to refresh.</p>
+  </footer>
+</main>
+
+<script type="application/json" id="map-data">{"title": "AI learning route", "subtitle": "From prompting basics to team guidance: evaluation, agents and privacy, using free resources.", "checked": "2026-10-29", "stages": [{"id": "basics", "short": "Basics", "title": "Prompting basics", "goal": "Get reliable answers from a model by writing clear prompts. Everything later builds on this.", "color": "#5B6B7A", "color_dark": "#9FB0BF", "gate": {"build": "Write five prompts for tasks you do every week, such as a status summary, risk wording or a stakeholder reply. Note what makes each answer better or worse.", "check": "Can you say in one sentence why a clearer prompt gave a better answer?"}, "resources": [{"id": "prompt-tutorial", "title": "Interactive prompt engineering tutorial", "url": "https://github.com/anthropics/prompt-eng-interactive-tutorial", "type": "repo", "tier": "start", "note": "Hands-on notebooks that teach prompting one technique at a time.", "cost": "Free"}, {"id": "anthropic-courses", "title": "Anthropic courses", "url": "https://github.com/anthropics/courses", "type": "repo", "tier": "start", "note": "Anthropic's educational courses, including one on real-world prompting.", "cost": "Free"}]}, {"id": "evals", "short": "Evals", "title": "AI evaluation", "goal": "Measure whether an AI answer is good, with repeatable tests instead of gut feel.", "color": "#0B6BCB", "color_dark": "#5AA2F0", "gate": {"build": "Write a 10-case suite from your own work, run it on two models, and compare them in the HTML report from your toolkit.", "check": "Which of your checks would let a wrong answer pass? Which would fail a right one?"}, "resources": [{"id": "success-criteria", "title": "Define success criteria and build evaluations", "url": "https://platform.claude.com/docs/en/build-with-claude/develop-tests", "type": "read", "tier": "start", "note": "Anthropic's guide to writing measurable success criteria and test cases.", "cost": "Free"}, {"id": "hamel-evals", "title": "Your AI product needs evals", "url": "https://hamel.dev/blog/posts/evals/index.html", "type": "read", "tier": "start", "note": "A practitioner's essay on building evals for an AI product.", "cost": "Free"}, {"id": "dlai-eval-agents", "title": "Evaluating AI agents (DeepLearning.AI)", "url": "https://www.deeplearning.ai/courses/evaluating-ai-agents", "type": "course", "tier": "start", "note": "Beginner short course built with Arize AI: about 2.5 hours, 15 video lessons, basic Python needed.", "cost": "Free to enrol during the platform beta. The graded assignment and certificate need a paid membership."}, {"id": "inspect-tutorial", "title": "Inspect AI tutorial", "url": "https://inspect.aisi.org.uk/tutorial.html", "type": "course", "tier": "start", "note": "Write and run your first eval with the UK AI Security Institute's framework.", "cost": "Free"}, {"id": "own-toolkit", "title": "Your own toolkit: 02-ai-eval-toolkit", "url": "../02-ai-eval-toolkit/README.md", "type": "repo", "tier": "start", "internal": true, "note": "The modular Python toolkit from this repo. Extend it as you learn.", "cost": "Yours"}, {"id": "hamel-faq", "title": "AI evals: everything you need to know", "url": "https://hamel.dev/blog/posts/evals-faq/", "type": "read", "tier": "deeper", "note": "Hamel Husain and Shreya Shankar answer common eval questions, such as how many examples you need.", "cost": "Free"}, {"id": "demystifying-evals", "title": "Demystifying evals for AI agents", "url": "https://www.anthropic.com/engineering/demystifying-evals-for-ai-agents", "type": "read", "tier": "deeper", "note": "Anthropic's engineering write-up on evaluating agents.", "cost": "Free"}, {"id": "inspect-ai", "title": "Inspect AI", "url": "https://github.com/UKGovernmentBEIS/inspect_ai", "type": "repo", "tier": "deeper", "note": "Open-source framework for LLM evaluations from the UK AI Security Institute.", "cost": "Free"}, {"id": "inspect-evals", "title": "Inspect Evals", "url": "https://github.com/UKGovernmentBEIS/inspect_evals", "type": "repo", "tier": "deeper", "note": "A collection of ready-made evals for Inspect AI. Good for reading how others write them.", "cost": "Free"}, {"id": "promptfoo", "title": "promptfoo", "url": "https://github.com/promptfoo/promptfoo", "type": "repo", "tier": "deeper", "note": "Tests prompts, agents and RAG setups, and also does red teaming. Declarative configs, command line and CI support.", "cost": "Free"}, {"id": "deepeval", "title": "DeepEval", "url": "https://github.com/confident-ai/deepeval", "type": "repo", "tier": "deeper", "note": "Python framework for evaluating LLM outputs.", "cost": "Free"}, {"id": "ragas", "title": "Ragas", "url": "https://github.com/explodinggradients/ragas", "type": "repo", "tier": "deeper", "note": "Evaluation toolkit for LLM applications, known for retrieval-augmented generation (RAG) checks.", "cost": "Free"}, {"id": "lm-eval-harness", "title": "lm-evaluation-harness", "url": "https://github.com/EleutherAI/lm-evaluation-harness", "type": "repo", "tier": "deeper", "note": "Framework for evaluating language models on standard academic benchmarks.", "cost": "Free"}, {"id": "openai-evals", "title": "OpenAI Evals", "url": "https://github.com/openai/evals", "type": "repo", "tier": "deeper", "note": "A framework for evaluating LLMs, plus an open-source registry of benchmarks.", "cost": "Free"}]}, {"id": "agents", "short": "Agents", "title": "Agents", "goal": "Understand how models use tools to complete multi-step tasks, and when a simple workflow is the better choice.", "color": "#0B8F80", "color_dark": "#3CC9B7", "gate": {"build": "Build a small agent with two or three tools, for example one that reads a risk log and drafts a status note. Then add test cases for it to your eval suite.", "check": "When would a fixed workflow beat an agent for this task?"}, "resources": [{"id": "effective-agents", "title": "Building effective AI agents", "url": "https://www.anthropic.com/research/building-effective-agents", "type": "read", "tier": "start", "note": "Anthropic's guide to agent design patterns.", "cost": "Free"}, {"id": "hf-agents-course", "title": "Hugging Face AI agents course", "url": "https://huggingface.co/learn/agents-course", "type": "course", "tier": "start", "note": "Theory to hands-on building, with smolagents, LlamaIndex and LangGraph. Units, three bonus units and an optional certificate.", "cost": "Free, including the certificate"}, {"id": "ms-agents-beginners", "title": "AI agents for beginners (Microsoft)", "url": "https://github.com/microsoft/ai-agents-for-beginners", "type": "repo", "tier": "start", "note": "A lesson-by-lesson open course with code samples.", "cost": "Free"}, {"id": "mcp-intro", "title": "What is the Model Context Protocol?", "url": "https://modelcontextprotocol.io/docs/2026-07-28/getting-started/intro", "type": "read", "tier": "start", "note": "The open protocol for connecting AI apps to tools and data.", "cost": "Free"}, {"id": "writing-tools", "title": "Writing effective tools for AI agents", "url": "https://www.anthropic.com/engineering/writing-tools-for-agents", "type": "read", "tier": "deeper", "note": "How to design the tools an agent calls.", "cost": "Free"}, {"id": "context-engineering", "title": "Effective context engineering for AI agents", "url": "https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents", "type": "read", "tier": "deeper", "note": "How to manage what an agent sees as its task grows.", "cost": "Free"}, {"id": "multi-agent", "title": "How we built our multi-agent research system", "url": "https://www.anthropic.com/engineering/multi-agent-research-system", "type": "read", "tier": "deeper", "note": "A real multi-agent system, described by the team that built it.", "cost": "Free"}, {"id": "mcp-python-sdk", "title": "MCP Python SDK", "url": "https://py.sdk.modelcontextprotocol.io/", "type": "repo", "tier": "deeper", "note": "Documentation for building your own MCP server in Python.", "cost": "Free"}]}, {"id": "privacy", "short": "Privacy", "title": "Privacy and security", "goal": "Know what personal data can reach an AI tool, what the law expects, and how models get attacked.", "color": "#6D4AC4", "color_dark": "#A78BFA", "gate": {"build": "Add a privacy red-team suite to your toolkit: prompts that try to pull out personal data or hidden instructions. Try Presidio as a stronger replacement for the no_pii check.", "check": "What personal data could reach an AI tool in your team's daily work, and where does it go next?"}, "resources": [{"id": "ico-ai-dp", "title": "ICO guidance on AI and data protection", "url": "https://ico.org.uk/for-organisations/uk-gdpr-guidance-and-resources/artificial-intelligence/guidance-on-ai-and-data-protection/about-this-guidance/", "type": "guidance", "tier": "start", "note": "The UK regulator's guidance on applying data protection law to AI.", "cost": "Free"}, {"id": "owasp-llm", "title": "OWASP Top 10 for LLM applications", "url": "https://owasp.org/www-project-top-10-for-large-language-model-applications/", "type": "guidance", "tier": "start", "note": "The standard list of security risks for LLM applications, such as prompt injection.", "cost": "Free"}, {"id": "presidio", "title": "Microsoft Presidio", "url": "https://github.com/microsoft/presidio", "type": "repo", "tier": "start", "note": "Open-source tool that finds and masks personal data in text, images and structured data.", "cost": "Free"}, {"id": "ico-explaining", "title": "ICO: explaining decisions made with AI", "url": "https://ico.org.uk/for-organisations/uk-gdpr-guidance-and-resources/artificial-intelligence/explaining-decisions-made-with-artificial-intelligence/part-1-the-basics-of-explaining-ai/", "type": "guidance", "tier": "deeper", "note": "How to explain AI-assisted decisions to the people they affect.", "cost": "Free"}, {"id": "ico-governance", "title": "ICO audit toolkit: governance and accountability in AI", "url": "https://ico.org.uk/for-organisations/advice-and-services/audits/data-protection-audit-framework/toolkits/artificial-intelligence/governance-and-accountability-in-ai/", "type": "guidance", "tier": "deeper", "note": "A checklist-style view of what good AI governance looks like to an auditor.", "cost": "Free"}, {"id": "ncsc-secure-ai", "title": "NCSC guidelines for secure AI system development", "url": "https://www.ncsc.gov.uk/collection/guidelines-secure-ai-system-development", "type": "guidance", "tier": "deeper", "note": "UK National Cyber Security Centre guidelines, developed with international partners.", "cost": "Free"}, {"id": "presidio-docs", "title": "Presidio documentation", "url": "https://microsoft.github.io/presidio", "type": "read", "tier": "deeper", "note": "Getting started and reference for detecting and anonymising personal data.", "cost": "Free"}]}, {"id": "team", "short": "Team", "title": "Governance and team guidance", "goal": "Turn what you have learned into rules your team can follow without asking you each time.", "color": "#B26A00", "color_dark": "#F2A33A", "gate": {"build": "Draft a one-page AI use guideline for your team: what data may go into AI tools, who approves new uses, and how outputs are checked.", "check": "Could a new team member follow it without asking you anything?"}, "resources": [{"id": "uk-ai-playbook", "title": "AI playbook for the UK government", "url": "https://www.gov.uk/government/publications/ai-playbook-for-the-uk-government", "type": "guidance", "tier": "start", "note": "Written for the UK public sector, and a good template for the principles any team needs.", "cost": "Free"}, {"id": "nist-rmf", "title": "NIST AI risk management framework", "url": "https://www.nist.gov/itl/AI-risk-management-framework", "type": "guidance", "tier": "start", "note": "A voluntary framework from the US standards body for managing AI risk.", "cost": "Free"}, {"id": "nist-genai", "title": "NIST generative AI profile (AI 600-1)", "url": "https://www.nist.gov/publications/artificial-intelligence-risk-management-framework-generative-artificial-intelligence", "type": "guidance", "tier": "deeper", "note": "A companion profile that applies the framework to generative AI.", "cost": "Free"}, {"id": "owasp-genai", "title": "OWASP GenAI security project", "url": "https://owasp.org/www-project-genai-security/", "type": "guidance", "tier": "deeper", "note": "OWASP's wider project on generative AI security, beyond the top 10 list.", "cost": "Free"}]}]}</script>
+<script>
+/* Builds the route map from the JSON embedded in the page.
+   Sections: storage, DOM helper, rendering, filtering, progress. */
+(function () {
+  "use strict";
+
+  var STORAGE_KEY = "ai-learning-route-progress-v1";
+  var TYPE_NAMES = { all: "All", course: "Courses", read: "Reading", repo: "Repos", guidance: "Guidance" };
+
+  var map = JSON.parse(document.getElementById("map-data").textContent);
+  var done = readProgress();
+  var activeType = "all";
+
+  /* ---------- storage (wrapped: it can be blocked or empty) ---------- */
+
+  function readProgress() {
+    try {
+      return JSON.parse(localStorage.getItem(STORAGE_KEY)) || {};
+    } catch (error) {
+      return {};
+    }
+  }
+
+  function writeProgress() {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(done));
+    } catch (error) {
+      /* Storage unavailable: progress lasts until the page is closed. */
+    }
+  }
+
+  /* ---------- small DOM helper ---------- */
+
+  function el(tag, props, children) {
+    var node = document.createElement(tag);
+    Object.keys(props || {}).forEach(function (key) {
+      if (key === "text") node.textContent = props[key];
+      else if (key === "class") node.className = props[key];
+      else node.setAttribute(key, props[key]);
+    });
+    (children || []).forEach(function (child) {
+      node.appendChild(child);
+    });
+    return node;
+  }
+
+  function setLineColors(node, stage) {
+    node.style.setProperty("--c-light", stage.color);
+    node.style.setProperty("--c-dark", stage.color_dark);
+  }
+
+  /* ---------- stop ids ---------- */
+
+  function gateId(stage) {
+    return stage.id + ":gate";
+  }
+
+  function stopIds(stage) {
+    return stage.resources.map(function (r) { return r.id; }).concat(gateId(stage));
+  }
+
+  /* ---------- rendering ---------- */
+
+  function renderStrip() {
+    var strip = document.getElementById("strip");
+    map.stages.forEach(function (stage) {
+      var fill = el("span", { class: "seg-fill", "data-fill": stage.id });
+      var link = el("a", { class: "seg", href: "#stage-" + stage.id }, [
+        el("span", { class: "seg-bar" }, [fill]),
+        el("span", { class: "seg-name", text: stage.short })
+      ]);
+      setLineColors(link, stage);
+      strip.appendChild(link);
+    });
+  }
+
+  function renderFilters() {
+    var container = document.getElementById("filters");
+    Object.keys(TYPE_NAMES).forEach(function (type) {
+      var chip = el("button", { class: "chip", type: "button", "data-type": type, text: TYPE_NAMES[type] });
+      chip.addEventListener("click", function () {
+        activeType = type;
+        applyFilter();
+      });
+      container.appendChild(chip);
+    });
+  }
+
+  function renderStop(id, extraClass, textChildren) {
+    var box = el("input", { class: "stop-box", type: "checkbox", "data-id": id });
+    box.checked = !!done[id];
+    box.addEventListener("change", function () {
+      if (box.checked) done[id] = true;
+      else delete done[id];
+      writeProgress();
+      refreshProgress();
+    });
+
+    var label = el("label", { class: "stop-row" }, [
+      box,
+      el("span", { class: "dot", "aria-hidden": "true" }),
+      el("span", { class: "stop-text" }, textChildren)
+    ]);
+    return el("li", { class: "stop " + extraClass }, [label]);
+  }
+
+  function renderResource(resource) {
+    var link = el("a", { href: resource.url, text: resource.title });
+    if (!resource.internal) {
+      link.setAttribute("target", "_blank");
+      link.setAttribute("rel", "noopener noreferrer");
+    }
+    var meta = el("span", { class: "meta" }, [
+      el("span", { class: "tag", text: resource.type }),
+      document.createTextNode(resource.cost)
+    ]);
+    var item = renderStop(resource.id, resource.tier === "deeper" ? "deeper" : "", [
+      el("span", { class: "title" }, [link]),
+      meta,
+      el("span", { class: "note", text: resource.note })
+    ]);
+    item.setAttribute("data-type", resource.type);
+    return item;
+  }
+
+  function renderGate(stage) {
+    var item = renderStop(gateId(stage), "gate", [
+      el("span", { class: "title", text: "Stage gate: build it" }),
+      el("span", { class: "note", text: stage.gate.build }),
+      el("span", { class: "check-line", text: "Check yourself: " + stage.gate.check })
+    ]);
+    return item;
+  }
+
+  function renderStopList(resources) {
+    return el("ul", { class: "stops" }, resources.map(renderResource));
+  }
+
+  function renderStage(stage) {
+    var start = stage.resources.filter(function (r) { return r.tier === "start"; });
+    var deeper = stage.resources.filter(function (r) { return r.tier === "deeper"; });
+
+    var section = el("section", { class: "stage", id: "stage-" + stage.id }, [
+      el("div", { class: "stage-head" }, [
+        el("span", { class: "hub", "aria-hidden": "true" }),
+        el("h2", { text: stage.title }),
+        el("p", { class: "goal", text: stage.goal }),
+        el("p", { class: "stage-count", "data-count": stage.id })
+      ]),
+      renderStopList(start)
+    ]);
+
+    if (deeper.length) {
+      section.appendChild(
+        el("details", { class: "more", "data-more": stage.id }, [
+          el("summary", { "data-more-label": stage.id }),
+          renderStopList(deeper)
+        ])
+      );
+    }
+    section.appendChild(el("ul", { class: "stops" }, [renderGate(stage)]));
+    setLineColors(section, stage);
+    return section;
+  }
+
+  function renderStages() {
+    var container = document.getElementById("stages");
+    map.stages.forEach(function (stage) {
+      container.appendChild(renderStage(stage));
+    });
+  }
+
+  /* ---------- filtering ---------- */
+
+  function applyFilter() {
+    document.querySelectorAll(".chip").forEach(function (chip) {
+      chip.setAttribute("aria-pressed", String(chip.getAttribute("data-type") === activeType));
+    });
+
+    document.querySelectorAll(".stop[data-type]").forEach(function (item) {
+      item.hidden = activeType !== "all" && item.getAttribute("data-type") !== activeType;
+    });
+
+    map.stages.forEach(function (stage) {
+      var more = document.querySelector('[data-more="' + stage.id + '"]');
+      if (!more) return;
+      var visible = more.querySelectorAll(".stop:not([hidden])").length;
+      more.hidden = visible === 0;
+      more.querySelector("summary").textContent = "Go deeper (" + visible + ")";
+    });
+  }
+
+  /* ---------- progress ---------- */
+
+  function countDone(ids) {
+    return ids.filter(function (id) { return done[id]; }).length;
+  }
+
+  function refreshProgress() {
+    var total = 0;
+    var finished = 0;
+
+    map.stages.forEach(function (stage) {
+      var ids = stopIds(stage);
+      var count = countDone(ids);
+      total += ids.length;
+      finished += count;
+
+      document.querySelector('[data-fill="' + stage.id + '"]').style.width = (100 * count) / ids.length + "%";
+      document.querySelector('[data-count="' + stage.id + '"]').textContent = count + " of " + ids.length + " stops";
+    });
+
+    document.getElementById("overall").textContent = finished + " of " + total + " stops visited";
+  }
+
+  function clearProgress() {
+    if (!window.confirm("Clear all ticked stops on this device?")) return;
+    done = {};
+    writeProgress();
+    document.querySelectorAll(".stop-box").forEach(function (box) { box.checked = false; });
+    refreshProgress();
+  }
+
+  /* ---------- start ---------- */
+
+  renderStrip();
+  renderFilters();
+  renderStages();
+  applyFilter();
+  refreshProgress();
+  document.getElementById("reset").addEventListener("click", clearProgress);
+})();
+
+</script>
+</body>
+</html>
