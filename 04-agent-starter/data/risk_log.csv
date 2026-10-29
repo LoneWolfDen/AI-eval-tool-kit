@@ -1,0 +1,8 @@
+id,title,likelihood,impact,status,owner,mitigation,due
+R-001,Vendor test environment delayed,4,5,open,Vendor manager,Escalate to vendor sponsor and agree a fallback environment,2026-11-14
+R-002,Legacy data fails validation during migration,3,5,mitigating,Data lead,Run profiling and cleansing sprint,2026-11-21
+R-003,Key engineers leave before go-live,2,4,open,Engineering manager,Document runbooks and cross-train two engineers,2026-12-05
+R-004,UAT sign-off takes longer than planned,3,3,open,Test lead,Agree the sign-off window with finance in advance,2026-11-28
+R-005,Regulatory guidance changes late,2,5,open,Compliance lead,Hold a monthly check with the compliance team,2026-12-12
+R-006,Training materials not ready,2,2,closed,Change lead,Materials delivered and reviewed,2026-10-30
+R-007,Network capacity too low for load tests,2,3,mitigating,Infrastructure lead,Book a capacity test slot,2026-11-18

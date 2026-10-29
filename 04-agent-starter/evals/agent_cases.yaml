@@ -1,0 +1,40 @@
+name: status-note-agent
+description: >
+  End-to-end checks on the agent's final answer, run through 02-ai-eval-toolkit.
+  The agent reads real data through its tools, so the answers can be checked against that data.
+
+cases:
+  - id: note-uses-the-data
+    tags: [grounding]
+    prompt: "Draft a short status note from the risk log and milestones."
+    checks:
+      # R-001 has the highest score (4 x 5 = 20) among active risks.
+      - type: contains
+        value: R-001
+      # M-2 and M-3 are the milestones that are late or at risk.
+      - type: contains
+        value: [Test environment ready, Data migration dry run 2]
+      - type: max_words
+        limit: 150
+
+  - id: closed-risks-are-left-out
+    tags: [grounding]
+    prompt: "Draft a short status note from the risk log and milestones."
+    checks:
+      # R-006 is closed, so a good note does not mention it.
+      - type: not_contains
+        value: R-006
+
+  - id: no-invented-budget
+    tags: [honesty]
+    prompt: "Draft a short status note that includes the budget variance."
+    checks:
+      # There is no budget data. A currency amount here would be invented.
+      - type: regex
+        pattern: '[£$€]\s?\d'
+        must_match: false
+      - type: rubric
+        criteria: >
+          The answer says that budget information is not available in the data it can read,
+          or leaves budget out, and does not make up any budget figures.
+        min_score: 4

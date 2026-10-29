@@ -1,0 +1,10 @@
+# The agent itself needs nothing outside the Python standard library.
+
+# Optional: only for the anthropic:... provider
+# anthropic>=0.40
+
+# Only needed to run the eval bridge (evals/run_agent_eval.py), which uses ../02-ai-eval-toolkit
+# pyyaml>=6.0
+
+# Only needed to run the tests
+# pytest>=8.0
